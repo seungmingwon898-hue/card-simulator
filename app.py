@@ -3,18 +3,14 @@ import streamlit as st
 import random
 
 st.set_page_config(
-    page_title="카드 공개 시뮬레이터",
+    page_title="카드 확률 시뮬레이터",
     page_icon="🃏",
     layout="centered"
 )
 
-# 화면 디자인
-st.title("🃏 카드 공개 시뮬레이터")
-st.caption("버튼을 누를 때마다 카드가 한 장씩 공개됩니다.")
+st.title("🃏 카드 확률 시뮬레이터")
+st.caption("카드를 한 장씩 공개하며 점수 변화를 확인하세요.")
 
-st.divider()
-
-# 카드 덱 생성
 SUITS = ["♠", "♥", "♦", "♣"]
 RANKS = [
     "A", "2", "3", "4", "5", "6", "7",
@@ -22,125 +18,155 @@ RANKS = [
 ]
 
 
-def make_deck():
-    return [
+def create_deck():
+    deck = [
         {"suit": suit, "rank": rank}
         for suit in SUITS
         for rank in RANKS
     ]
-
-
-def start_new_round():
-    deck = make_deck()
     random.shuffle(deck)
-
-    st.session_state.deck = deck
-    st.session_state.opened_cards = []
+    return deck
 
 
-# 최초 실행 시 초기화
+def score(cards):
+    values = {
+        "A": 1, "2": 2, "3": 3, "4": 4, "5": 5,
+        "6": 6, "7": 7, "8": 8, "9": 9,
+        "10": 0, "J": 0, "Q": 0, "K": 0
+    }
+    return sum(values[c["rank"]] for c in cards) % 10
+
+
+def reset():
+    st.session_state.deck = create_deck()
+    st.session_state.player = []
+    st.session_state.banker = []
+    st.session_state.history = []
+    st.session_state.reveal_index = 0
+    st.session_state.done = False
+
+
 if "deck" not in st.session_state:
-    start_new_round()
+    reset()
 
 
-# 카드 한 장 공개
-def reveal_card():
-    if st.session_state.deck:
-        card = st.session_state.deck.pop()
-        st.session_state.opened_cards.append(card)
+def reveal_next():
+    if st.session_state.reveal_index >= 6:
+        st.session_state.done = True
+        return
+
+    if not st.session_state.deck:
+        st.session_state.done = True
+        return
+
+    # 공개 순서: 플레이어, 뱅커 번갈아 공개
+    if st.session_state.reveal_index % 2 == 0:
+        side = "player"
+    else:
+        side = "banker"
+
+    card = st.session_state.deck.pop()
+    st.session_state[side].append(card)
+    st.session_state.history.append((side, card))
+    st.session_state.reveal_index += 1
+
+    if st.session_state.reveal_index >= 6:
+        st.session_state.done = True
 
 
-# 새 게임 버튼
-if st.button("🔄 새로 시작", use_container_width=True):
-    start_new_round()
+if st.button("🔄 새 게임", use_container_width=True):
+    reset()
     st.rerun()
 
 
-st.subheader("공개된 카드")
+# 점수판
+player_score = score(st.session_state.player)
+banker_score = score(st.session_state.banker)
 
-opened = st.session_state.opened_cards
+left, right = st.columns(2)
 
-# 처음에는 카드가 하나도 표시되지 않음
-if len(opened) == 0:
-    st.info("아직 공개된 카드가 없습니다. 아래 버튼을 눌러 시작하세요.")
+with left:
+    st.subheader("🔵 플레이어")
+    st.metric("현재 점수", player_score)
 
-else:
-    # 공개된 카드만 화면에 표시
-    columns = st.columns(4)
+with right:
+    st.subheader("🔴 뱅커")
+    st.metric("현재 점수", banker_score)
 
-    for index, card in enumerate(opened):
-        with columns[index % 4]:
+
+# 카드 표시
+st.divider()
+left, right = st.columns(2)
+
+
+def show_cards(title, cards):
+    with st.container(border=True):
+        st.markdown(f"### {title}")
+
+        if not cards:
+            st.caption("카드가 아직 공개되지 않았습니다.")
+            return
+
+        for card in cards:
             suit = card["suit"]
             rank = card["rank"]
-
-            # 하트와 다이아몬드는 빨간색
-            if suit in ["♥", "♦"]:
-                color = "#d62828"
-            else:
-                color = "#222222"
+            color = "#d62828" if suit in ["♥", "♦"] else "#222222"
 
             st.markdown(
                 f"""
                 <div style="
-                    border: 2px solid #dddddd;
-                    border-radius: 12px;
-                    background: white;
-                    padding: 18px 5px;
-                    margin-bottom: 12px;
-                    text-align: center;
-                    min-height: 95px;
-                ">
-                    <div style="
-                        color: {color};
-                        font-size: 30px;
-                        font-weight: bold;
-                    ">{rank}</div>
-                    <div style="
-                        color: {color};
-                        font-size: 27px;
-                    ">{suit}</div>
-                </div>
+                    background:#ffffff;
+                    border:2px solid #dddddd;
+                    border-radius:12px;
+                    padding:12px;
+                    margin:8px 0;
+                    text-align:center;
+                    color:{color};
+                    font-size:28px;
+                    font-weight:bold;
+                ">{rank} {suit}</div>
                 """,
                 unsafe_allow_html=True
             )
 
-# 공개 진행 상황
+
+with left:
+    show_cards("플레이어 카드", st.session_state.player)
+
+with right:
+    show_cards("뱅커 카드", st.session_state.banker)
+
+
 st.divider()
 
-opened_count = len(opened)
-remaining_count = len(st.session_state.deck)
+st.metric("남은 카드", len(st.session_state.deck))
+st.progress(st.session_state.reveal_index / 6)
 
-col1, col2 = st.columns(2)
-
-with col1:
-    st.metric("공개한 카드", f"{opened_count}장")
-
-with col2:
-    st.metric("남은 카드", f"{remaining_count}장")
-
-st.progress(opened_count / 52)
-
-# 한 장씩 공개하는 버튼
-st.divider()
-
-if remaining_count > 0:
+if not st.session_state.done:
     if st.button(
-        "🃏 카드 한 장 공개",
-        use_container_width=True,
-        type="primary"
+        "🃏 다음 카드 공개",
+        type="primary",
+        use_container_width=True
     ):
-        reveal_card()
+        reveal_next()
         st.rerun()
 else:
-    st.success("52장의 카드를 모두 공개했습니다.")
+    if player_score > banker_score:
+        st.success("플레이어 점수가 더 높습니다.")
+    elif banker_score > player_score:
+        st.success("뱅커 점수가 더 높습니다.")
+    else:
+        st.info("두 점수가 같습니다.")
 
-# 공개된 카드 목록
-with st.expander("공개된 카드 목록 보기"):
-    if opened:
-        for index, card in enumerate(opened, start=1):
-            st.write(
-                f"{index}번째 카드: "
-                f"{card['rank']}{card['suit']}"
-            )
+    st.caption("이 결과는 학습용 점수 비교이며 실제 바카라 규칙의 승패 판정은 아닙니다.")
+
+
+with st.expander("공개 기록"):
+    if st.session_state.history:
+        for i, (side, card) in enumerate(
+            st.session_state.history, start=1
+        ):
+            name = "플레이어" if side == "player" else "뱅커"
+            st.write(f"{i}. {name}: {card['rank']}{card['suit']}")
     else:
         st.write("아직 공개된 카드가 없습니다.")
