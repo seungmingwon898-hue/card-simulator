@@ -1,130 +1,146 @@
 
-import random
 import streamlit as st
+import random
 
-st.set_page_config(page_title="바카라 카드 시뮬레이터", page_icon="🃏", layout="centered")
-
-if "round_data" not in st.session_state:
-    st.session_state.round_data = None
-if "revealed" not in st.session_state:
-    st.session_state.revealed = 0
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-def card_name(card):
-    rank, suit = card
-    suits = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
-    ranks = {"A": "A", "J": "J", "Q": "Q", "K": "K"}
-    return f"{suits[suit]} {ranks.get(rank, rank)}"
-
-def card_value(card):
-    rank = card[0]
-    if rank in ("10", "J", "Q", "K"):
-        return 0
-    if rank == "A":
-        return 1
-    return int(rank)
-
-def total(cards):
-    return sum(card_value(c) for c in cards) % 10
-
-def new_round():
-    deck = [(r, s) for s in "SHDC"
-            for r in ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]]
-    random.shuffle(deck)
-
-    player = [deck.pop(), deck.pop()]
-    banker = [deck.pop(), deck.pop()]
-
-    if total(player) < 6:
-        player.append(deck.pop())
-
-    if total(banker) < 6:
-        banker.append(deck.pop())
-
-    st.session_state.round_data = {
-        "player": player,
-        "banker": banker,
-    }
-    st.session_state.revealed = 0
-
-def show_cards(label, cards, start, revealed):
-    st.subheader(label)
-    cols = st.columns(len(cards))
-    for i, card in enumerate(cards):
-        with cols[i]:
-            if start + i < revealed:
-                color = "#d62828" if card[1] in ("H", "D") else "#222222"
-                st.markdown(
-                    f"""<div style="background:white;color:{color};
-                    border-radius:12px;padding:18px 5px;text-align:center;
-                    font-size:25px;border:2px solid #ddd;">
-                    {card_name(card)}</div>""",
-                    unsafe_allow_html=True
-                )
-            else:
-                st.markdown(
-                    """<div style="background:#174a38;color:white;
-                    border-radius:12px;padding:18px 5px;text-align:center;
-                    font-size:25px;border:2px solid #ddd;">🂠</div>""",
-                    unsafe_allow_html=True
-                )
-
-st.markdown(
-    "<h1 style='text-align:center;color:#d4af37'>🃏 BACCARAT</h1>"
-    "<p style='text-align:center'>카드를 한 장씩 공개하는 시뮬레이터</p>",
-    unsafe_allow_html=True
+st.set_page_config(
+    page_title="카드 공개 시뮬레이터",
+    page_icon="🃏",
+    layout="centered"
 )
 
-st.markdown("---")
+# 화면 디자인
+st.title("🃏 카드 공개 시뮬레이터")
+st.caption("버튼을 누를 때마다 카드가 한 장씩 공개됩니다.")
 
-if st.button("🎴 새 게임 시작", use_container_width=True):
-    new_round()
+st.divider()
 
-data = st.session_state.round_data
+# 카드 덱 생성
+SUITS = ["♠", "♥", "♦", "♣"]
+RANKS = [
+    "A", "2", "3", "4", "5", "6", "7",
+    "8", "9", "10", "J", "Q", "K"
+]
 
-if data:
-    player = data["player"]
-    banker = data["banker"]
-    all_cards = player + banker
 
-    show_cards("PLAYER", player, 0, st.session_state.revealed)
-    show_cards("BANKER", banker, len(player), st.session_state.revealed)
+def make_deck():
+    return [
+        {"suit": suit, "rank": rank}
+        for suit in SUITS
+        for rank in RANKS
+    ]
 
-    st.write(f"공개된 카드: {st.session_state.revealed} / {len(all_cards)}")
 
-    if st.session_state.revealed < len(all_cards):
-        if st.button("🂠 다음 카드 공개", use_container_width=True):
-            st.session_state.revealed += 1
-            st.rerun()
+def start_new_round():
+    deck = make_deck()
+    random.shuffle(deck)
+
+    st.session_state.deck = deck
+    st.session_state.opened_cards = []
+
+
+# 최초 실행 시 초기화
+if "deck" not in st.session_state:
+    start_new_round()
+
+
+# 카드 한 장 공개
+def reveal_card():
+    if st.session_state.deck:
+        card = st.session_state.deck.pop()
+        st.session_state.opened_cards.append(card)
+
+
+# 새 게임 버튼
+if st.button("🔄 새로 시작", use_container_width=True):
+    start_new_round()
+    st.rerun()
+
+
+st.subheader("공개된 카드")
+
+opened = st.session_state.opened_cards
+
+# 처음에는 카드가 하나도 표시되지 않음
+if len(opened) == 0:
+    st.info("아직 공개된 카드가 없습니다. 아래 버튼을 눌러 시작하세요.")
+
+else:
+    # 공개된 카드만 화면에 표시
+    columns = st.columns(4)
+
+    for index, card in enumerate(opened):
+        with columns[index % 4]:
+            suit = card["suit"]
+            rank = card["rank"]
+
+            # 하트와 다이아몬드는 빨간색
+            if suit in ["♥", "♦"]:
+                color = "#d62828"
+            else:
+                color = "#222222"
+
+            st.markdown(
+                f"""
+                <div style="
+                    border: 2px solid #dddddd;
+                    border-radius: 12px;
+                    background: white;
+                    padding: 18px 5px;
+                    margin-bottom: 12px;
+                    text-align: center;
+                    min-height: 95px;
+                ">
+                    <div style="
+                        color: {color};
+                        font-size: 30px;
+                        font-weight: bold;
+                    ">{rank}</div>
+                    <div style="
+                        color: {color};
+                        font-size: 27px;
+                    ">{suit}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+# 공개 진행 상황
+st.divider()
+
+opened_count = len(opened)
+remaining_count = len(st.session_state.deck)
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric("공개한 카드", f"{opened_count}장")
+
+with col2:
+    st.metric("남은 카드", f"{remaining_count}장")
+
+st.progress(opened_count / 52)
+
+# 한 장씩 공개하는 버튼
+st.divider()
+
+if remaining_count > 0:
+    if st.button(
+        "🃏 카드 한 장 공개",
+        use_container_width=True,
+        type="primary"
+    ):
+        reveal_card()
+        st.rerun()
+else:
+    st.success("52장의 카드를 모두 공개했습니다.")
+
+# 공개된 카드 목록
+with st.expander("공개된 카드 목록 보기"):
+    if opened:
+        for index, card in enumerate(opened, start=1):
+            st.write(
+                f"{index}번째 카드: "
+                f"{card['rank']}{card['suit']}"
+            )
     else:
-        p_total = total(player)
-        b_total = total(banker)
-
-        st.markdown("---")
-        st.subheader("🏆 최종 결과")
-
-        col1, col2 = st.columns(2)
-        col1.metric("PLAYER 점수", p_total)
-        col2.metric("BANKER 점수", b_total)
-
-        if p_total > b_total:
-            result = "PLAYER 승리"
-        elif b_total > p_total:
-            result = "BANKER 승리"
-        else:
-            result = "무승부"
-
-        st.success(f"🎉 {result}")
-
-        if st.button("결과 기록하기", use_container_width=True):
-            if not st.session_state.history or st.session_state.history[-1] != result:
-                st.session_state.history.append(result)
-
-if st.session_state.history:
-    st.markdown("---")
-    st.subheader("📊 기록")
-    st.write(f"총 기록 수: {len(st.session_state.history)}")
-    st.write(f"PLAYER 승리: {st.session_state.history.count('PLAYER 승리')}")
-    st.write(f"BANKER 승리: {st.session_state.history.count('BANKER 승리')}")
-    st.write(f"무승부: {st.session_state.history.count('무승부')}")
+        st.write("아직 공개된 카드가 없습니다.")
